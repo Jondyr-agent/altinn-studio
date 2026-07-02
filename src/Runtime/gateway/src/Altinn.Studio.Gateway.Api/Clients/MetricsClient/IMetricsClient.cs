@@ -11,6 +11,11 @@ internal interface IMetricsClient
         int range,
         CancellationToken cancellationToken
     );
+    public Task<IEnumerable<InstanceFailedRequest>> GetAppInstanceFailedRequests(
+        string app,
+        int range,
+        CancellationToken cancellationToken
+    );
     public Task<IEnumerable<AppMetric>> GetAppMetrics(string app, int range, CancellationToken cancellationToken);
     public Uri GetLogsUrl(
         string subscriptionId,
@@ -19,6 +24,7 @@ internal interface IMetricsClient
         IReadOnlyCollection<string> apps,
         string metricName,
         DateTimeOffset from,
-        DateTimeOffset to
+        DateTimeOffset to,
+        string? searchPhrase = null
     );
 }

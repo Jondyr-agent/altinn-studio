@@ -31,6 +31,14 @@ public interface IMetricsService
         CancellationToken cancellationToken
     );
 
+    public Task<IEnumerable<InstanceErrorMetric>> GetAppInstanceErrorMetricsAsync(
+        string org,
+        AltinnEnvironment environment,
+        string app,
+        int range,
+        CancellationToken cancellationToken
+    );
+
     public Task<IEnumerable<AppHealthMetric>> GetAppHealthMetricsAsync(
         string org,
         AltinnEnvironment environment,

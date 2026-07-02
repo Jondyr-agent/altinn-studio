@@ -113,6 +113,45 @@ internal static class HandleMetrics
         return Results.Ok(metrics);
     }
 
+    internal static async Task<IResult> GetAppInstanceErrorMetrics(
+        IOptionsMonitor<GatewayContext> gatewayContext,
+        IServiceProvider serviceProvider,
+        IOptionsMonitor<MetricsClientSettings> metricsClientSettings,
+        string app,
+        int range,
+        CancellationToken cancellationToken
+    )
+    {
+        IMetricsClient metricsClient = serviceProvider.GetRequiredKeyedService<IMetricsClient>(
+            metricsClientSettings.CurrentValue.Provider
+        );
+        var currentGatewayContext = gatewayContext.CurrentValue;
+
+        var now = DateTimeOffset.UtcNow;
+        var from = now.AddMinutes(-range);
+
+        var instanceFailedRequests = await metricsClient.GetAppInstanceFailedRequests(app, range, cancellationToken);
+
+        var metrics = instanceFailedRequests.Select(failedRequest => new InstanceErrorMetric
+        {
+            Name = failedRequest.Name,
+            InstanceId = failedRequest.InstanceId,
+            Count = failedRequest.Count,
+            LogsUrl = metricsClient.GetLogsUrl(
+                currentGatewayContext.AzureSubscriptionId,
+                currentGatewayContext.ServiceOwner,
+                currentGatewayContext.Environment,
+                [app],
+                failedRequest.Name,
+                from,
+                now,
+                failedRequest.InstanceId
+            ),
+        });
+
+        return Results.Ok(metrics);
+    }
+
     internal static async Task<IResult> GetAppActivityMetrics(
         IServiceProvider serviceProvider,
         IOptionsMonitor<MetricsClientSettings> metricsClientSettings,

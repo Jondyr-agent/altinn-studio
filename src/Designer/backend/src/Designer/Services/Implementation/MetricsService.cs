@@ -46,6 +46,24 @@ internal sealed class MetricsService(IRuntimeGatewayClient runtimeGatewayClient)
     }
 
     /// <inheritdoc />
+    public async Task<IEnumerable<InstanceErrorMetric>> GetAppInstanceErrorMetricsAsync(
+        string org,
+        AltinnEnvironment environment,
+        string app,
+        int range,
+        CancellationToken cancellationToken
+    )
+    {
+        return await runtimeGatewayClient.GetAppInstanceErrorMetricsAsync(
+            org,
+            environment,
+            app,
+            range,
+            cancellationToken
+        );
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<AppHealthMetric>> GetAppHealthMetricsAsync(
         string org,
         AltinnEnvironment environment,

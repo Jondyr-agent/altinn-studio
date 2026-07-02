@@ -1,0 +1,12 @@
+.details {
+  margin-top: var(--ds-size-2);
+}
+
+.table {
+  width: 100%;
+}
+
+.hint {
+  margin-top: var(--ds-size-2);
+  color: var(--ds-color-neutral-text-subtle);
+}

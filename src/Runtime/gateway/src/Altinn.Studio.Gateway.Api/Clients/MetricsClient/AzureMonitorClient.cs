@@ -20,24 +20,40 @@ internal sealed class AzureMonitorClient(
 {
     private const int MaxRange = 10080;
     private const int MaxActivityWindowDays = 30;
+    private const int MaxInstanceRows = 100;
 
-    private static readonly IDictionary<string, string[]> _operationNames = new Dictionary<string, string[]>
+    // Matches the instance guid in request URLs like '.../instances/{instanceOwnerPartyId}/{instanceGuid}/...'.
+    // The party id is consumed by '\d+' and the guid is the captured group, matching the admin UI's instance id.
+    private const string InstanceIdUrlPattern = @"/instances/\d+/([^/]+)";
+
+    private sealed record OperationCategory(string[] OperationNames, bool IsInstanceScoped);
+
+    private static readonly IReadOnlyDictionary<string, OperationCategory> _operationNames = new Dictionary<
+        string,
+        OperationCategory
+    >
     {
         {
             "failed_process_next_requests",
-            [
-                "PUT Process/NextElement [app/instanceGuid/instanceOwnerPartyId/org]",
-                "PUT {org}/{app}/instances/{instanceOwnerPartyId:int}/{instanceGuid:guid}/process/next",
-            ]
+            new OperationCategory(
+                [
+                    "PUT Process/NextElement [app/instanceGuid/instanceOwnerPartyId/org]",
+                    "PUT {org}/{app}/instances/{instanceOwnerPartyId:int}/{instanceGuid:guid}/process/next",
+                ],
+                IsInstanceScoped: true
+            )
         },
         {
             "failed_instance_creation_requests",
-            [
-                "POST Instances/Post [app/org]",
-                "POST Instances/PostSimplified [app/org]",
-                "POST {org}/{app}/instances",
-                "POST {org}/{app}/instances/create",
-            ]
+            new OperationCategory(
+                [
+                    "POST Instances/Post [app/org]",
+                    "POST Instances/PostSimplified [app/org]",
+                    "POST {org}/{app}/instances",
+                    "POST {org}/{app}/instances/create",
+                ],
+                IsInstanceScoped: false
+            )
         },
     };
 
@@ -78,7 +94,7 @@ internal sealed class AzureMonitorClient(
                 | where Success == false
                 | where ClientType != 'Browser'
                 | where toint(ResultCode) >= 500
-                | where OperationName in ('{string.Join("','", _operationNames.Values.SelectMany(value => value))}')
+                | where OperationName in ('{string.Join("','", _operationNames.Values.SelectMany(value => value.OperationNames))}')
                 | summarize Count = count() by AppRoleName, OperationName;";
 
         Response<LogsQueryResult> response = await _logsQueryClient.QueryResourceAsync(
@@ -94,7 +110,9 @@ internal sealed class AzureMonitorClient(
                 return new
                 {
                     AppName = row.GetString("AppRoleName"),
-                    Name = _operationNames.First(n => n.Value.Contains(row.GetString("OperationName"))).Key,
+                    Name = _operationNames
+                        .First(n => n.Value.OperationNames.Contains(row.GetString("OperationName")))
+                        .Key,
                     Count = row.GetDouble("Count") ?? 0,
                 };
             })
@@ -213,7 +231,7 @@ internal sealed class AzureMonitorClient(
                 | where ClientType != 'Browser'
                 | where toint(ResultCode) >= 500
                 | where AppRoleName == '{app.Replace("'", "''")}'
-                | where OperationName in ('{string.Join("','", _operationNames.Values.SelectMany(value => value))}')
+                | where OperationName in ('{string.Join("','", _operationNames.Values.SelectMany(value => value.OperationNames))}')
                 | summarize Count = count() by OperationName, DateTimeOffset = bin(TimeGenerated, {interval})
                 | order by DateTimeOffset desc";
 
@@ -226,7 +244,7 @@ internal sealed class AzureMonitorClient(
 
         var metrics = response
             .Value.Table.Rows.GroupBy(row =>
-                _operationNames.First(n => n.Value.Contains(row.GetString("OperationName"))).Key
+                _operationNames.First(n => n.Value.OperationNames.Contains(row.GetString("OperationName"))).Key
             )
             .Select(group => new AppFailedRequest
             {
@@ -246,6 +264,49 @@ internal sealed class AzureMonitorClient(
                 Counts = [],
             }
         );
+    }
+
+    public async Task<IEnumerable<InstanceFailedRequest>> GetAppInstanceFailedRequests(
+        string app,
+        int range,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(range);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(range, MaxRange);
+
+        var logAnalyticsWorkspaceId = GetApplicationLogAnalyticsWorkspaceId();
+
+        var instanceScopedOperationNames = _operationNames
+            .Where(category => category.Value.IsInstanceScoped)
+            .SelectMany(category => category.Value.OperationNames);
+
+        var query =
+            $@"
+                AppRequests
+                | where Success == false
+                | where ClientType != 'Browser'
+                | where toint(ResultCode) >= 500
+                | where AppRoleName == '{app.Replace("'", "''")}'
+                | where OperationName in ('{string.Join("','", instanceScopedOperationNames)}')
+                | extend InstanceId = extract(@'{InstanceIdUrlPattern}', 1, Url)
+                | where isnotempty(InstanceId)
+                | summarize Count = count() by OperationName, InstanceId
+                | top {MaxInstanceRows} by Count";
+
+        Response<LogsQueryResult> response = await _logsQueryClient.QueryResourceAsync(
+            logAnalyticsWorkspaceId,
+            query,
+            new LogsQueryTimeRange(TimeSpan.FromMinutes(range)),
+            cancellationToken: cancellationToken
+        );
+
+        return response.Value.Table.Rows.Select(row => new InstanceFailedRequest
+        {
+            Name = _operationNames.First(n => n.Value.OperationNames.Contains(row.GetString("OperationName"))).Key,
+            InstanceId = row.GetString("InstanceId") ?? string.Empty,
+            Count = row.GetDouble("Count") ?? 0,
+        });
     }
 
     public async Task<IEnumerable<AppMetric>> GetAppMetrics(string app, int range, CancellationToken cancellationToken)
@@ -303,14 +364,17 @@ internal sealed class AzureMonitorClient(
         IReadOnlyCollection<string> apps,
         string metricName,
         DateTimeOffset from,
-        DateTimeOffset to
+        DateTimeOffset to,
+        string? searchPhrase = null
     )
     {
-        if (!_operationNames.TryGetValue(metricName, out var operationNames))
+        if (!_operationNames.TryGetValue(metricName, out var operationCategory))
             throw new ArgumentException(
                 $"Unknown metricName '{metricName}'. Valid values: {string.Join(", ", OperationNameKeys)}",
                 nameof(metricName)
             );
+
+        var operationNames = operationCategory.OperationNames;
 
         string jsonPath = Path.Combine(AppContext.BaseDirectory, "Clients", "MetricsClient", "logsQueryTemplate.json");
         var fromUtc = from.ToUniversalTime();
@@ -325,7 +389,16 @@ internal sealed class AzureMonitorClient(
             .Replace("{operation_Names}", string.Join(", ", operationNames.Select(n => $"'{n}'")))
             .Replace("\"{appNames}\"", string.Join(", ", apps.Select(name => $"\"{JsonEncodedText.Encode(name)}\"")))
             .Replace("\"{operationNames}\"", string.Join(",", operationNames.Select(n => $"\"{n}\"")));
-        var minifiedJson = System.Text.Json.Nodes.JsonNode.Parse(json)?.ToJsonString() ?? string.Empty;
+        var jsonNode = System.Text.Json.Nodes.JsonNode.Parse(json);
+        if (
+            !string.IsNullOrEmpty(searchPhrase)
+            && jsonNode?["originalParams"]?["searchPhrase"] is System.Text.Json.Nodes.JsonObject searchPhraseNode
+        )
+        {
+            // Pre-fill the Application Insights search box so the logs view is scoped to a single instance.
+            searchPhraseNode["originalPhrase"] = searchPhrase;
+        }
+        var minifiedJson = jsonNode?.ToJsonString() ?? string.Empty;
 
         string encodedLogsQuery = Uri.EscapeDataString(minifiedJson);
 

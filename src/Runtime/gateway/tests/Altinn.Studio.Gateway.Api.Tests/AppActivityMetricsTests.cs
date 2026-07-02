@@ -167,6 +167,12 @@ public sealed class AppActivityMetricsTests
             CancellationToken cancellationToken
         ) => throw new NotSupportedException();
 
+        public Task<IEnumerable<InstanceFailedRequest>> GetAppInstanceFailedRequests(
+            string app,
+            int range,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
         public Task<
             IEnumerable<Altinn.Studio.Gateway.Api.Clients.MetricsClient.Contracts.AzureMonitor.AppMetric>
         > GetAppMetrics(string app, int range, CancellationToken cancellationToken) =>
@@ -179,7 +185,8 @@ public sealed class AppActivityMetricsTests
             IReadOnlyCollection<string> apps,
             string metricName,
             DateTimeOffset from,
-            DateTimeOffset to
+            DateTimeOffset to,
+            string? searchPhrase = null
         ) => throw new NotSupportedException();
     }
 }

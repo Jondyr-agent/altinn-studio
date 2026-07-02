@@ -75,6 +75,26 @@ public class MetricsController(IMetricsService metricsService) : ControllerBase
         return Ok(metrics);
     }
 
+    [HttpGet("app/errors/instances")]
+    public async Task<ActionResult<IEnumerable<InstanceErrorMetric>>> GetAppInstanceErrorMetrics(
+        string org,
+        string env,
+        string app,
+        int range,
+        CancellationToken cancellationToken
+    )
+    {
+        var environment = AltinnEnvironment.FromName(env);
+        IEnumerable<InstanceErrorMetric> metrics = await _metricsService.GetAppInstanceErrorMetricsAsync(
+            org,
+            environment,
+            app,
+            range,
+            cancellationToken
+        );
+        return Ok(metrics);
+    }
+
     [HttpGet("app/health")]
     public async Task<ActionResult<IEnumerable<AppHealthMetric>>> GetAppHealthMetrics(
         string org,

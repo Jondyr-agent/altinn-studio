@@ -4,6 +4,8 @@ import type { AppMetric as Metric } from 'admin/features/apps/types/metrics/AppM
 import { Bar } from 'react-chartjs-2';
 import { getChartOptions } from 'admin/features/apps/utils/charts';
 import { Alert } from 'admin/features/apps/components/Alert/Alert';
+import { isInstanceScopedErrorMetric } from 'admin/features/apps/types/metrics/InstanceErrorMetric';
+import { AppInstanceErrors } from './AppInstanceErrors';
 
 type AppErrorMetricProps = {
   metric: Metric;
@@ -28,13 +30,18 @@ export const AppErrorMetric = ({ metric, range }: AppErrorMetricProps) => {
   };
 
   return (
-    <Alert
-      color={isError ? 'danger' : 'success'}
-      title={t(`admin.metrics.${metric.name}`)}
-      count={count.toString()}
-      url={metric.logsUrl}
-    >
-      <Bar options={options} data={metricsChartData} />
-    </Alert>
+    <>
+      <Alert
+        color={isError ? 'danger' : 'success'}
+        title={t(`admin.metrics.${metric.name}`)}
+        count={count.toString()}
+        url={metric.logsUrl}
+      >
+        <Bar options={options} data={metricsChartData} />
+      </Alert>
+      {isInstanceScopedErrorMetric(metric.name) && (
+        <AppInstanceErrors name={metric.name} range={range} />
+      )}
+    </>
   );
 };

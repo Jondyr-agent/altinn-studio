@@ -145,6 +145,23 @@ public class RuntimeGatewayClient : IRuntimeGatewayClient
     }
 
     /// <inheritdoc />
+    public async Task<IEnumerable<InstanceErrorMetric>> GetAppInstanceErrorMetricsAsync(
+        string org,
+        AltinnEnvironment environment,
+        string app,
+        int range,
+        CancellationToken cancellationToken
+    )
+    {
+        using var client = _httpClientFactory.CreateClient("runtime-gateway");
+        var baseUrl = await _environmentsService.GetAppClusterUri(org, environment.Name);
+        string requestUrl =
+            $"{baseUrl}/runtime/gateway/api/v1/metrics/app/errors/instances?app={Uri.EscapeDataString(app)}&range={range}";
+
+        return await client.GetFromJsonAsync<IEnumerable<InstanceErrorMetric>>(requestUrl, cancellationToken) ?? [];
+    }
+
+    /// <inheritdoc />
     public async Task<IEnumerable<AppHealthMetric>> GetAppHealthMetricsAsync(
         string org,
         AltinnEnvironment environment,

@@ -106,6 +106,14 @@ export const kubernetesWrapperRoute = async (req, res) => {
   res.json(kubernetesWrapperDeployments.filter((deploy) => !release || deploy.release === release));
 };
 
+export const getDeployedApps = (org, env) => [
+  ...new Set(
+    deploys
+      .filter((deploy) => deploy.org === org && deploy.envName === env)
+      .map((deploy) => deploy.app),
+  ),
+];
+
 export const runtimeGatewayDeploymentsRoute = async (req, res) => {
   const { org, env, origin } = req.params;
 

@@ -149,6 +149,11 @@ const randomInstances = Array.from({ length: 1000 }).map(() => {
   };
 });
 
+// Exposes a stable sample of instance ids so other mocks (e.g. per-instance error metrics)
+// can reference instances that this mock will actually resolve.
+export const sampleInstanceIds = (count) =>
+  randomInstances.slice(0, count).map((instance) => instance.id);
+
 function parseIntParam(param) {
   const n = parseInt(param);
   return !isNaN(n) ? n : null;

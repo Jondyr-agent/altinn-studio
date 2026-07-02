@@ -6,6 +6,8 @@ export const appMetricsPath = (org: string, env: string, app: string, range: num
   `${adminApiBasePath}/metrics/${org}/${env}/app?app=${app}&range=${range}`; // Get
 export const appErrorMetricsPath = (org: string, env: string, app: string, range: number) =>
   `${adminApiBasePath}/metrics/${org}/${env}/app/errors?app=${app}&range=${range}`; // Get
+export const appInstanceErrorMetricsPath = (org: string, env: string, app: string, range: number) =>
+  `${adminApiBasePath}/metrics/${org}/${env}/app/errors/instances?app=${app}&range=${range}`; // Get
 export const appHealthMetricsPath = (org: string, env: string, app: string) =>
   `${adminApiBasePath}/metrics/${org}/${env}/app/health?app=${app}`; // Get
 export const runningAppsPath = (org: string) => `${adminApiBasePath}/applications/${org}`; // Get

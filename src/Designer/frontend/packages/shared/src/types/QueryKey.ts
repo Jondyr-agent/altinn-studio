@@ -73,6 +73,7 @@ export enum QueryKey {
   ErrorMetrics = 'ErrorMetrics',
   AppMetrics = 'AppMetrics',
   AppErrorMetrics = 'AppErrorMetrics',
+  AppInstanceErrorMetrics = 'AppInstanceErrorMetrics',
   AppHealthMetrics = 'AppHealthMetrics',
   AppInstances = 'AppInstances',
   AppInstanceDetails = 'AppInstanceDetails',
